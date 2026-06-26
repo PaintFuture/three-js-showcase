@@ -16,13 +16,15 @@ A comprehensive Three.js demonstration project featuring advanced rendering tech
 
 ### Prerequisites
 
-- Node.js 16+ and npm
+- Node.js 24 and npm
 
 ### Installation
 
 ```bash
 npm install
 ```
+
+If you use a Node version manager, switch to Node 24 before installing dependencies.
 
 ### Development
 
@@ -45,6 +47,17 @@ Generates optimized build in `docs/` for GitHub Pages deployment.
 ```bash
 npm run preview
 ```
+
+Serves the built site locally at `http://localhost:4173`
+
+### Local Deployment
+
+```bash
+npm run build
+npm run preview -- --host 0.0.0.0
+```
+
+This rebuilds the static output into `docs/` and serves that production build locally for verification.
 
 ## Project Structure
 

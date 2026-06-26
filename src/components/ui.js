@@ -79,4 +79,8 @@ export class UI {
     document.getElementById('scene-title').textContent = title
     document.getElementById('scene-description').textContent = description
   }
+
+  updateSceneDescription(description) {
+    document.getElementById('scene-description').textContent = description
+  }
 }

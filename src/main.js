@@ -9,6 +9,8 @@ import { ParticleSystem } from './utils/particles.js'
 
 class App {
   constructor() {
+    this.visualizerBaseDescription = 'Reactive 3D visualization driven by live microphone frequencies. Chrome on Windows and Android will prompt for mic access when you open this scene.'
+
     this.setup()
     this.createScenes()
     this.setupUI()
@@ -60,7 +62,9 @@ class App {
     this.scenes.landing = new LandingScene(this.scene, this.camera, this.renderer)
     this.scenes.terrain = new TerrainScene(this.scene, this.camera, this.renderer)
     this.scenes.water = new WaterScene(this.scene, this.camera, this.renderer)
-    this.scenes.visualizer = new AudioVisualizerScene(this.scene, this.camera, this.renderer)
+    this.scenes.visualizer = new AudioVisualizerScene(this.scene, this.camera, this.renderer, {
+      onStatusChange: (status) => this.updateVisualizerDescription(status),
+    })
     this.currentSceneKey = null
   }
 
@@ -83,6 +87,14 @@ class App {
     this.ui.onSceneSwitch('visualizer', () => {
       this.switchScene('visualizer')
     })
+  }
+
+  updateVisualizerDescription(status) {
+    if (this.currentSceneKey !== 'visualizer') {
+      return
+    }
+
+    this.ui.updateSceneDescription(`${this.visualizerBaseDescription} ${status}`)
   }
 
   switchScene(sceneKey) {
@@ -121,11 +133,15 @@ class App {
         'Gerstner wave simulation with dynamic reflections, foam effects, and realistic water rendering.'
       )
     } else if (sceneKey === 'visualizer') {
-      this.scenes.visualizer = new AudioVisualizerScene(this.scene, this.camera, this.renderer)
+      this.scenes.visualizer = new AudioVisualizerScene(this.scene, this.camera, this.renderer, {
+        onStatusChange: (status) => this.updateVisualizerDescription(status),
+      })
       this.ui.updateSceneInfo(
         'Audio Visualizer',
-        'Reactive 3D visualization responding to audio frequencies with animated bars and dynamic coloring.'
+        this.visualizerBaseDescription
       )
+
+      this.scenes.visualizer.activate()
     }
   }
 

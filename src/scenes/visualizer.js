@@ -2,20 +2,24 @@ import * as THREE from 'three'
 import { OrbitControls } from '../utils/controls.js'
 
 export class AudioVisualizerScene {
-  constructor(scene, camera, renderer) {
+  constructor(scene, camera, renderer, options = {}) {
     this.scene = scene
     this.camera = camera
     this.renderer = renderer
     this.time = 0
+    this.onStatusChange = options.onStatusChange || (() => {})
 
     this.audioContext = null
+    this.audioStream = null
+    this.sourceNode = null
     this.analyser = null
     this.dataArray = null
+    this.audioSetupPromise = null
     this.bars = []
 
     this.setupScene()
     this.createBars()
-    this.setupAudio()
+    this.updateStatus('Click or tap Visualizer to enable microphone input.')
   }
 
   setupScene() {
@@ -68,42 +72,115 @@ export class AudioVisualizerScene {
     }
   }
 
-  setupAudio() {
-    // Create a simple audio context for oscillation
-    // In real use, connect to microphone or audio file
+  updateStatus(message) {
+    this.onStatusChange(message)
+  }
+
+  async activate() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      this.updateStatus('Microphone input is not available in this browser. Use Chrome on localhost or HTTPS.')
+      return
+    }
+
+    if (this.analyser && this.audioContext) {
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume()
+      }
+      this.updateStatus('Microphone connected. Speak to drive the visualizer.')
+      return
+    }
+
+    if (!this.audioSetupPromise) {
+      this.audioSetupPromise = this.setupAudio().finally(() => {
+        if (!this.analyser) {
+          this.audioSetupPromise = null
+        }
+      })
+    }
+
+    await this.audioSetupPromise
+  }
+
+  async setupAudio() {
+    this.updateStatus('Requesting microphone access...')
+
     try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-      this.audioContext = audioCtx
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext
+      if (!AudioContextClass) {
+        throw new Error('AudioContext unavailable')
+      }
 
-      // Create a simple oscillator for demo
-      const osc = audioCtx.createOscillator()
-      const gainNode = audioCtx.createGain()
+      this.audioContext = new AudioContextClass()
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume()
+      }
 
-      osc.frequency.setValueAtTime(200, audioCtx.currentTime)
-      gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime)
+      this.audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      })
 
-      osc.connect(gainNode)
-      gainNode.connect(audioCtx.destination)
+      this.sourceNode = this.audioContext.createMediaStreamSource(this.audioStream)
+      this.analyser = this.audioContext.createAnalyser()
+      this.analyser.fftSize = 256
+      this.analyser.smoothingTimeConstant = 0.82
+      this.dataArray = new Uint8Array(this.analyser.frequencyBinCount)
+      this.sourceNode.connect(this.analyser)
 
-      osc.start()
-      this.oscillator = osc
-    } catch (e) {
-      console.log('AudioContext not available, using fallback visualization')
+      this.updateStatus('Microphone connected. Speak to drive the visualizer.')
+    } catch (error) {
+      console.error('Microphone setup failed:', error)
+
+      if (this.sourceNode) {
+        this.sourceNode.disconnect()
+        this.sourceNode = null
+      }
+
+      if (this.audioStream) {
+        this.audioStream.getTracks().forEach((track) => track.stop())
+        this.audioStream = null
+      }
+
+      if (this.audioContext) {
+        this.audioContext.close()
+        this.audioContext = null
+      }
+
+      this.analyser = null
+      this.dataArray = null
+
+      if (error?.name === 'NotAllowedError') {
+        this.updateStatus('Microphone access was blocked. Allow the mic in Chrome and reopen Visualizer.')
+      } else if (error?.name === 'NotFoundError') {
+        this.updateStatus('No microphone was found on this device.')
+      } else {
+        this.updateStatus('Microphone setup failed. Use Chrome on localhost or HTTPS and try again.')
+      }
     }
   }
 
   update(deltaTime) {
     this.time += deltaTime
 
-    // Generate pseudo-audio data from time
-    this.bars.forEach((bar, i) => {
-      const frequency = 0.5 + (i / this.bars.length) * 2
-      const phase = this.time * frequency + i * 0.1
-      const value = (Math.sin(phase) + 1) / 2
+    if (this.analyser && this.dataArray) {
+      this.analyser.getByteFrequencyData(this.dataArray)
+    }
 
-      bar.currentHeight = 1 + value * 4
+    this.bars.forEach((bar, i) => {
+      const sample = this.dataArray ? this.dataArray[i] / 255 : 0
+      const fallback = (Math.sin(this.time * (0.5 + (i / this.bars.length) * 2) + i * 0.1) + 1) / 2
+      const value = this.dataArray ? sample : fallback
+
+      bar.currentHeight += (1 + value * 10 - bar.currentHeight) * 0.18
       bar.mesh.scale.y = bar.currentHeight
       bar.mesh.position.y = bar.currentHeight / 2
+
+      const intensity = 0.15 + value * 1.8
+      bar.mesh.material.emissiveIntensity = intensity
     })
 
     this.controls.update()
@@ -116,8 +193,27 @@ export class AudioVisualizerScene {
     })
     this.scene.clear()
 
-    if (this.oscillator) {
-      this.oscillator.stop()
+    if (this.sourceNode) {
+      this.sourceNode.disconnect()
+      this.sourceNode = null
     }
+
+    if (this.analyser) {
+      this.analyser.disconnect()
+      this.analyser = null
+    }
+
+    if (this.audioStream) {
+      this.audioStream.getTracks().forEach((track) => track.stop())
+      this.audioStream = null
+    }
+
+    if (this.audioContext) {
+      this.audioContext.close()
+      this.audioContext = null
+    }
+
+    this.dataArray = null
+    this.audioSetupPromise = null
   }
 }
