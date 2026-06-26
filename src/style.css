@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+}
+
+#canvas-container {
+  width: 100%;
+  height: 100%;
+}
+
+canvas {
+  display: block;
+}
+
+.scene-btn {
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.scene-btn.active {
+  background-color: rgb(37, 99, 235);
+  box-shadow: 0 0 20px rgba(37, 99, 235, 0.5);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .backdrop-blur {
+    backdrop-filter: blur(10px);
+  }
+}
+
+@media (max-width: 768px) {
+  #scene-switcher {
+    top: 4px;
+    left: 4px;
+  }
+
+  #info-card {
+    bottom: 4px;
+    left: 4px;
+    max-width: calc(100vw - 8px);
+  }
+
+  #stats-panel {
+    display: none;
+  }
+}
